@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>সেন্সর ডেটা ড্যাশবোর্ড (অটো-রিফ্রেশ)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
+
+    <style>
+        /* Add custom styles if needed */
+        .filter-button.active {
+            background-color: #2563eb; /* Example active color (Tailwind's blue-600) */
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8 font-sans">
+
+    <div class="container mx-auto bg-white p-6 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-center text-gray-700">সেন্সর ডেটা ড্যাশবোর্ড (অটো-রিফ্রেশ)</h1>
+
+        <div class="flex flex-wrap justify-center space-x-2 mb-6">
+            <button data-period="15m" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">১৫ মিনিট</button> <button data-period="30m" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">৩০ মিনিট</button> <button data-period="1h" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">১ ঘণ্টা</button>
+            <button data-period="1d" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2 active">১ দিন</button> <button data-period="7d" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">৭ দিন</button>
+            <button data-period="15d" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">১৫ দিন</button>
+            <button data-period="30d" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">৩০ দিন</button>
+        </div>
+
+        <div class="w-full h-96">
+             <canvas id="sensorChart"></canvas>
+        </div>
+
+        <p id="statusMessage" class="text-center text-gray-500 mt-4"></p>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('sensorChart').getContext('2d');
+        const statusMessage = document.getElementById('statusMessage');
+        const filterButtons = document.querySelectorAll('.filter-button');
+        let sensorChart;
+        let allData = []; // Store all fetched data to avoid re-fetching if only filtering
+        let currentPeriod = '1d'; // Default period
+
+        // --- আপনার নির্দিষ্ট API URL ---
+        const API_URL = 'https://esp8266-0jd1.onrender.com/api/esptemp';
+
+        // Chart Configuration (আগের মতই)
+        const chartConfig = {
+            type: 'line',
+            data: {
+                labels: [], // Timestamps
+                datasets: [
+                    { label: 'Sensor 1 Temp (°C)', data: [], borderColor: 'rgb(255, 99, 132)', backgroundColor: 'rgba(255, 99, 132, 0.5)', tension: 0.1, yAxisID: 'yT' },
+                    { label: 'Sensor 1 Hum (%)', data: [], borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.5)', tension: 0.1, yAxisID: 'yH' },
+                    { label: 'Sensor 2 Temp (°C)', data: [], borderColor: 'rgb(255, 159, 64)', backgroundColor: 'rgba(255, 159, 64, 0.5)', tension: 0.1, yAxisID: 'yT' },
+                    { label: 'Sensor 2 Hum (%)', data: [], borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.5)', tension: 0.1, yAxisID: 'yH' }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: {
+                    x: { type: 'time', time: { tooltipFormat: 'YYYY-MM-DD HH:mm:ss' }, title: { display: true, text: 'সময়' } },
+                    yT: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'তাপমাত্রা (°C)' } },
+                    yH: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'আর্দ্রতা (%)' }, grid: { drawOnChartArea: false } }
+                },
+                plugins: { tooltip: { mode: 'index', intersect: false } },
+                 interaction: { mode: 'nearest', axis: 'x', intersect: false }
+            }
+        };
+
+        // Function to fetch data from API (আগের মতই)
+        async function fetchData() {
+            console.log("Fetching data...");
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    console.error(`HTTP error! status: ${response.status}`);
+                    statusMessage.textContent = `ডেটা রিফ্রেশ করতে সমস্যা (${response.status})। শেষ আপডেট: ${moment(statusMessage.textContent.split(': ').pop(), 'YYYY-MM-DD HH:mm:ss').isValid() ? statusMessage.textContent.split(': ').pop() : 'Unknown'}`;
+                    return;
+                }
+                const newData = await response.json();
+                allData = newData;
+                statusMessage.textContent = `সর্বশেষ আপডেট: ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
+                filterAndupdateChart(currentPeriod);
+            } catch (error) {
+                console.error('Fetch data failed:', error);
+                statusMessage.textContent = `ডেটা রিফ্রেশ ব্যর্থ। শেষ আপডেট: ${moment(statusMessage.textContent.split(': ').pop(), 'YYYY-MM-DD HH:mm:ss').isValid() ? statusMessage.textContent.split(': ').pop() : 'Unknown'}`;
+            }
+        }
+
+         // Function to filter data based on period and update chart
+         function filterAndupdateChart(period) {
+            if (!allData || allData.length === 0) {
+                 statusMessage.textContent = 'কোনো ডেটা পাওয়া যায়নি।';
+                 if (sensorChart) {
+                     sensorChart.data.labels = [];
+                     sensorChart.data.datasets.forEach(dataset => { dataset.data = []; });
+                     sensorChart.update();
+                 }
+                 return;
+            }
+
+             const now = moment();
+             let startTime;
+
+             // --- সুইচ স্টেটমেন্ট আপডেট করা হয়েছে ---
+             switch (period) {
+                 case '15m': // নতুন কেস
+                     startTime = now.clone().subtract(15, 'minutes');
+                     break;
+                 case '30m': // নতুন কেস
+                     startTime = now.clone().subtract(30, 'minutes');
+                     break;
+                 case '1h':
+                     startTime = now.clone().subtract(1, 'hours');
+                     break;
+                 case '7d':
+                     startTime = now.clone().subtract(7, 'days');
+                     break;
+                 case '15d':
+                     startTime = now.clone().subtract(15, 'days');
+                     break;
+                 case '30d':
+                     startTime = now.clone().subtract(30, 'days');
+                     break;
+                 case '1d': // ডিফল্ট কেস
+                 default:
+                     startTime = now.clone().subtract(1, 'days');
+                     break;
+             }
+             // --- সুইচ স্টেটমেন্ট আপডেট শেষ ---
+
+
+             const filteredData = allData.filter(item => {
+                 const itemTime = moment(item.timestamp, 'YYYY-MM-DD HH:mm:ss');
+                 return itemTime.isValid() && itemTime.isAfter(startTime);
+             });
+
+             const labels = [];
+             const temp1Data = [];
+             const hum1Data = [];
+             const temp2Data = [];
+             const hum2Data = [];
+
+             filteredData.forEach(item => {
+                 labels.push(moment(item.timestamp, 'YYYY-MM-DD HH:mm:ss'));
+                 temp1Data.push(item.sensor1 ? item.sensor1.temperature : null);
+                 hum1Data.push(item.sensor1 ? item.sensor1.humidity : null);
+                 temp2Data.push(item.sensor2 ? item.sensor2.temperature : null);
+                 hum2Data.push(item.sensor2 ? item.sensor2.humidity : null);
+             });
+
+             if (sensorChart) {
+                 sensorChart.data.labels = labels;
+                 sensorChart.data.datasets[0].data = temp1Data;
+                 sensorChart.data.datasets[1].data = hum1Data;
+                 sensorChart.data.datasets[2].data = temp2Data;
+                 sensorChart.data.datasets[3].data = hum2Data;
+                 sensorChart.options.scales.x.time.unit = calculateTimeUnit(startTime, now);
+                 sensorChart.update();
+             } else {
+                 chartConfig.data.labels = labels;
+                 chartConfig.data.datasets[0].data = temp1Data;
+                 chartConfig.data.datasets[1].data = hum1Data;
+                 chartConfig.data.datasets[2].data = temp2Data;
+                 chartConfig.data.datasets[3].data = hum2Data;
+                 chartConfig.options.scales.x.time.unit = calculateTimeUnit(startTime, now);
+                 sensorChart = new Chart(ctx, chartConfig);
+             }
+
+            if (filteredData.length === 0) {
+                  const lastUpdateTime = moment(statusMessage.textContent.split(': ').pop(), 'YYYY-MM-DD HH:mm:ss');
+                  statusMessage.textContent = `নির্বাচিত সময়সীমার (${period}) মধ্যে কোনো ডেটা পাওয়া যায়নি। সর্বশেষ ডেটা আপডেট: ${lastUpdateTime.isValid() ? lastUpdateTime.format('YYYY-MM-DD HH:mm:ss') : 'Unknown'}`;
+             }
+         }
+
+          // Helper function to determine appropriate time unit for Chart.js x-axis (আগের মতই)
+          function calculateTimeUnit(startTime, endTime) {
+            const duration = moment.duration(endTime.diff(startTime));
+            // Add checks for minutes if needed, although 'hour' might still be fine for 30m
+            if (duration.asMinutes() <= 90) return 'minute'; // Show minutes for up to 1.5 hours
+            if (duration.asHours() <= 48) return 'hour';
+            if (duration.asDays() <= 31) return 'day';
+            return 'month';
+        }
+
+        // Add event listeners to buttons (আগের মতই)
+        filterButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                currentPeriod = button.getAttribute('data-period');
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                filterAndupdateChart(currentPeriod);
+            });
+        });
+
+        // Initial data fetch on page load (আগের মতই)
+        fetchData();
+
+        // Automatically refresh data every minute (আগের মতই)
+        setInterval(fetchData, 60000);
+
+    </script>
+
+</body>
+</html>

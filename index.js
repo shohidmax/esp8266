@@ -50,6 +50,7 @@ async function run() {
     const productsCollection = client.db('atifdatamax').collection('products');
     const products_2Collection = client.db('atifdatamax').collection('product_2');
     const ESP_2Collection = client.db('atifdatamax').collection('Tempareturedata');
+    const bat_2Collection = client.db('atifdatamax').collection('batcuring');
 
 
 
@@ -66,7 +67,7 @@ async function run() {
          console.log(`Sensor 2 (DHT22) - Temp: ${sensor2.temperature}°C, Hum: ${sensor2.humidity}%`);
          // সফলভাবে ডেটা গ্রহণের পর একটি রেসপন্স পাঠান
          res.status(200).json({ message: "Data received successfully" });
-         const result = await ESP_2Collection.insertOne(accounts);
+         const result = await bat_2Collection.insertOne(accounts);
       res.send(result)
       } else {
         res.status(400).json({ message: "Invalid data format" });
@@ -76,13 +77,13 @@ async function run() {
 
     app.get('/api/esptemp', async(req, res) =>{
       const query = {};
-      const cursor = ESP_2Collection.find(query);
+      const cursor = bat_2Collection.find(query);
       const accounts = await cursor.toArray();
       res.send(accounts);
     })
     app.post('/api/esptempu', async (req, res) => {
       const accounts = req.body;
-      const result = await ESP_2Collection.insertOne(accounts);
+      const result = await bat_2Collection.insertOne(accounts);
       res.send(result)
     }); 
 

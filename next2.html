@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>সেন্সর ডেটা ড্যাশবোর্ড (অটো-রিফ্রেশ)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
+
+    <style>
+        .filter-button.active { background-color: #2563eb; color: white; }
+        .filter-button:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .table-container { max-height: 400px; overflow-y: auto; }
+        .summary-box { padding: 0.5rem; text-align: center; border: 1px solid #e5e7eb; border-radius: 0.375rem; margin-bottom: 0.5rem; }
+        .summary-label { font-size: 0.75rem; color: #6b7280; }
+        .summary-value { font-size: 1.125rem; font-weight: 600; color: #1f2937; }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-8 font-sans">
+
+    <div class="container mx-auto bg-white p-4 md:p-6 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-4 text-center text-gray-700">সেন্সর ডেটা ড্যাশবোর্ড</h1>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+             <h2 class="text-lg font-semibold mb-3 text-center text-gray-800">নির্দিষ্ট সময়সীমা অনুযায়ী ফিল্টার</h2>
+             <div class="flex flex-col md:flex-row md:items-end md:space-x-4 space-y-3 md:space-y-0">
+                 <div class="flex-grow">
+                     <label for="startDate" class="block text-sm font-medium text-gray-700 mb-1">শুরুর তারিখ ও সময়</label>
+                     <input type="datetime-local" id="startDate" name="startDate" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                 </div>
+                 <div class="flex-grow">
+                     <label for="endDate" class="block text-sm font-medium text-gray-700 mb-1">শেষের তারিখ ও সময়</label>
+                     <input type="datetime-local" id="endDate" name="endDate" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                 </div>
+                 <div class="flex space-x-2">
+                      <button id="filterDateButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">ফিল্টার</button>
+                      <button id="resetDateButton" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">রিসেট</button>
+                 </div>
+             </div>
+             <p id="dateFilterError" class="text-red-600 text-sm mt-2"></p>
+        </div>
+        <div class="mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+             <h2 class="text-lg font-semibold mb-2 text-center text-indigo-800">গত ২৪ ঘণ্টার গড়</h2>
+             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                 {/* ... 24hr average divs আগের মতই ... */}
+                 <div><span class="text-sm font-medium text-gray-600">Sensor 1 Temp:</span> <span id="avg24hrS1Temp" class="block text-xl font-bold text-indigo-700">--.- °C</span></div>
+                 <div><span class="text-sm font-medium text-gray-600">Sensor 1 Hum:</span> <span id="avg24hrS1Hum" class="block text-xl font-bold text-indigo-700">--.- %</span></div>
+                 <div><span class="text-sm font-medium text-gray-600">Sensor 2 Temp:</span> <span id="avg24hrS2Temp" class="block text-xl font-bold text-indigo-700">--.- °C</span></div>
+                 <div><span class="text-sm font-medium text-gray-600">Sensor 2 Hum:</span> <span id="avg24hrS2Hum" class="block text-xl font-bold text-indigo-700">--.- %</span></div>
+             </div>
+        </div>
+        <div id="periodFilterContainer" class="flex flex-wrap justify-center space-x-2 mb-6">
+             <button data-period="15m" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">১৫ মিঃ</button>
+             <button data-period="30m" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">৩০ মিঃ</button>
+             <button data-period="1h" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">১ ঘঃ</button>
+             <button data-period="1d" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2 active">১ দিন</button> <button data-period="7d" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">৭ দিন</button>
+             <button data-period="15d" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">১৫ দিন</button>
+             <button data-period="30d" class="filter-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">৩০ দিন</button>
+        </div>
+
+        <div class="w-full h-72 md:h-96 mb-8">
+             <canvas id="sensorChart"></canvas>
+        </div>
+
+        <hr class="mb-6">
+        <h2 class="text-xl font-semibold mb-4 text-gray-700">নির্বাচিত সময়সীমার (<span id="selectedPeriodLabel">১ দিন</span>) চিত্র</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+             {/* Sensor 1 & Sensor 2 Sections with Averages & Pie Charts - আগের মতই */}
+              <div class="bg-gray-50 p-4 rounded-lg border">
+                <h3 class="text-lg font-semibold mb-3 text-center">Sensor 1</h3>
+                <div class="grid grid-cols-2 gap-4 mb-4"> <div class="summary-box"><div class="summary-label">গড় তাপমাত্রা</div><div id="avgPeriodS1Temp" class="summary-value">--.- °C</div></div> <div class="summary-box"><div class="summary-label">গড় আর্দ্রতা</div><div id="avgPeriodS1Hum" class="summary-value">--.- %</div></div> </div>
+                <div class="w-full h-48 md:h-64"><canvas id="pieChartSensor1"></canvas></div> <p class="text-xs text-center text-gray-500 mt-2">আর্দ্রতার বন্টন (%)</p>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg border">
+                 <h3 class="text-lg font-semibold mb-3 text-center">Sensor 2</h3>
+                 <div class="grid grid-cols-2 gap-4 mb-4"> <div class="summary-box"><div class="summary-label">গড় তাপমাত্রা</div><div id="avgPeriodS2Temp" class="summary-value">--.- °C</div></div> <div class="summary-box"><div class="summary-label">গড় আর্দ্রতা</div><div id="avgPeriodS2Hum" class="summary-value">--.- %</div></div> </div>
+                 <div class="w-full h-48 md:h-64"><canvas id="pieChartSensor2"></canvas></div> <p class="text-xs text-center text-gray-500 mt-2">আর্দ্রতার বন্টন (%)</p>
+            </div>
+        </div>
+        <hr class="mb-4">
+        <h2 class="text-xl font-semibold mb-4 text-gray-700">সর্বশেষ ৩০টি ডেটা</h2>
+         <p id="statusMessage" class="text-center text-gray-500 mb-4"></p>
+        <div class="table-container border rounded-lg">
+             <table class="min-w-full divide-y divide-gray-200" id="dataTable">
+                 <thead class="bg-gray-50 sticky top-0"> {/* ... টেবিল হেডার আগের মতই ... */} <tr> <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">টাইমস্ট্যাম্প</th> <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">S1 Temp</th> <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">S1 Hum</th> <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">S2 Temp</th> <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">S2 Hum</th> </tr> </thead>
+                 <tbody id="dataTableBody" class="bg-white divide-y divide-gray-200"> {/* ... টেবিল বডি আগের মতই ... */} <tr><td colspan="5" class="text-center p-4 text-gray-500">ডেটা লোড হচ্ছে...</td></tr> </tbody>
+             </table>
+        </div>
+        </div>
+
+    <script>
+        // Get contexts and elements (নতুন এলিমেন্ট যোগ করা হয়েছে)
+        const lineCtx = document.getElementById('sensorChart').getContext('2d');
+        const pieCtx1 = document.getElementById('pieChartSensor1').getContext('2d');
+        const pieCtx2 = document.getElementById('pieChartSensor2').getContext('2d');
+        const statusMessage = document.getElementById('statusMessage');
+        const avg24hrS1TempEl = document.getElementById('avg24hrS1Temp');
+        const avg24hrS1HumEl = document.getElementById('avg24hrS1Hum');
+        const avg24hrS2TempEl = document.getElementById('avg24hrS2Temp');
+        const avg24hrS2HumEl = document.getElementById('avg24hrS2Hum');
+        const avgPeriodS1TempEl = document.getElementById('avgPeriodS1Temp');
+        const avgPeriodS1HumEl = document.getElementById('avgPeriodS1Hum');
+        const avgPeriodS2TempEl = document.getElementById('avgPeriodS2Temp');
+        const avgPeriodS2HumEl = document.getElementById('avgPeriodS2Hum');
+        const selectedPeriodLabelEl = document.getElementById('selectedPeriodLabel');
+        const filterButtons = document.querySelectorAll('.filter-button');
+        const dataTableBody = document.getElementById('dataTableBody');
+        // নতুন ডেট ফিল্টার এলিমেন্ট
+        const startDateInput = document.getElementById('startDate');
+        const endDateInput = document.getElementById('endDate');
+        const filterDateButton = document.getElementById('filterDateButton');
+        const resetDateButton = document.getElementById('resetDateButton');
+        const dateFilterErrorEl = document.getElementById('dateFilterError');
+        const periodFilterContainer = document.getElementById('periodFilterContainer');
+
+
+        // Chart instances and data
+        let sensorChart, pieChart1, pieChart2;
+        let allData = [];
+        let currentPeriod = '1d'; // Default period for chart
+        let isDateFilterActive = false; // Flag for date filter status
+
+        const API_URL = 'http://localhost:3005/api/esptemp';
+
+        // Chart Configurations (আগের মতই)
+        const lineChartConfig = { /* ... আগের মতই ... */ type: 'line', data: { labels: [], datasets: [ { label: 'Sensor 1 Temp (°C)', data: [], borderColor: 'rgb(255, 99, 132)', backgroundColor: 'rgba(255, 99, 132, 0.5)', tension: 0.1, yAxisID: 'yT' }, { label: 'Sensor 1 Hum (%)', data: [], borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.5)', tension: 0.1, yAxisID: 'yH' }, { label: 'Sensor 2 Temp (°C)', data: [], borderColor: 'rgb(255, 159, 64)', backgroundColor: 'rgba(255, 159, 64, 0.5)', tension: 0.1, yAxisID: 'yT' }, { label: 'Sensor 2 Hum (%)', data: [], borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.5)', tension: 0.1, yAxisID: 'yH' } ] }, options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { x: { type: 'time', time: { tooltipFormat: 'YYYY-MM-DD HH:mm:ss' }, title: { display: true, text: 'সময়' } }, yT: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'তাপমাত্রা (°C)' } }, yH: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'আর্দ্রতা (%)' }, grid: { drawOnChartArea: false } } }, plugins: { tooltip: { mode: 'index', intersect: false }, legend: { display: true, position: 'top' } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } } };
+        const pieChartConfigBase = { /* ... আগের মতই ... */ type: 'pie', data: { labels: ['কম (0-40%)', 'মাঝারি (40-70%)', 'বেশি (70-100%)'], datasets: [{ label: 'আর্দ্রতা বন্টন', data: [0, 0, 0], backgroundColor: [ 'rgb(255, 205, 86)', 'rgb(75, 192, 192)', 'rgb(54, 162, 235)' ], hoverOffset: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: function(context) { let label = context.label || ''; if (label) { label += ': '; } if (context.parsed !== null) { const total = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0); const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) + '%' : '0%'; label += `${context.parsed} (${percentage})`; } return label; } } } } } };
+
+        // --- Helper Functions ---
+        function calculateAverage(data, sensorKey, valueKey) { /* ... আগের মতই ... */ let sum = 0; let count = 0; data.forEach(item => { if (item[sensorKey] && typeof item[sensorKey][valueKey] === 'number' && !isNaN(item[sensorKey][valueKey])) { sum += item[sensorKey][valueKey]; count++; } }); return count > 0 ? (sum / count).toFixed(1) : 'N/A'; }
+        function updateDataTable(data) { /* ... আগের মতই ... */ if (!dataTableBody) return; dataTableBody.innerHTML = ''; if (!data || data.length === 0) { dataTableBody.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-gray-500">কোনো ডেটা পাওয়া যায়নি।</td></tr>'; return; } const sortedData = [...data].sort((a, b) => moment(b.timestamp, 'YYYY-MM-DD HH:mm:ss').diff(moment(a.timestamp, 'YYYY-MM-DD HH:mm:ss'))); const latestData = sortedData.slice(0, 30); latestData.forEach(item => { const row = document.createElement('tr'); row.classList.add('hover:bg-gray-50'); const timestamp = moment(item.timestamp, 'YYYY-MM-DD HH:mm:ss').isValid() ? moment(item.timestamp).format('YYYY-MM-DD HH:mm:ss') : 'Invalid Date'; const temp1 = item.sensor1 && typeof item.sensor1.temperature === 'number' ? item.sensor1.temperature.toFixed(1) : 'N/A'; const hum1 = item.sensor1 && typeof item.sensor1.humidity === 'number' ? item.sensor1.humidity.toFixed(1) : 'N/A'; const temp2 = item.sensor2 && typeof item.sensor2.temperature === 'number' ? item.sensor2.temperature.toFixed(1) : 'N/A'; const hum2 = item.sensor2 && typeof item.sensor2.humidity === 'number' ? item.sensor2.humidity.toFixed(1) : 'N/A'; row.innerHTML = ` <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${timestamp}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${temp1}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${hum1}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${temp2}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${hum2}</td> `; dataTableBody.appendChild(row); }); }
+        function calculateAndUpdate24hrAverage(data) { /* ... আগের মতই ... */ const now = moment(); const startTime = now.clone().subtract(24, 'hours'); const filteredData = data.filter(item => { const itemTime = moment(item.timestamp, 'YYYY-MM-DD HH:mm:ss'); return itemTime.isValid() && itemTime.isAfter(startTime); }); if (filteredData.length > 0) { avg24hrS1TempEl.textContent = `${calculateAverage(filteredData, 'sensor1', 'temperature')} °C`; avg24hrS1HumEl.textContent = `${calculateAverage(filteredData, 'sensor1', 'humidity')} %`; avg24hrS2TempEl.textContent = `${calculateAverage(filteredData, 'sensor2', 'temperature')} °C`; avg24hrS2HumEl.textContent = `${calculateAverage(filteredData, 'sensor2', 'humidity')} %`; } else { avg24hrS1TempEl.textContent = '--.- °C'; avg24hrS1HumEl.textContent = '--.- %'; avg24hrS2TempEl.textContent = '--.- °C'; avg24hrS2HumEl.textContent = '--.- %'; } }
+        function updatePieCharts(data, chartInstance, sensorKey) { /* ... আগের মতই ... */ let lowCount = 0, medCount = 0, highCount = 0; data.forEach(item => { if (item[sensorKey] && typeof item[sensorKey].humidity === 'number' && !isNaN(item[sensorKey].humidity)) { const hum = item[sensorKey].humidity; if (hum < 40) lowCount++; else if (hum <= 70) medCount++; else highCount++; } }); if (chartInstance) { chartInstance.data.datasets[0].data = [lowCount, medCount, highCount]; chartInstance.update(); } else { let newConfig = JSON.parse(JSON.stringify(pieChartConfigBase)); newConfig.data.datasets[0].data = [lowCount, medCount, highCount]; if (sensorKey === 'sensor1') { pieChart1 = new Chart(pieCtx1, newConfig); } else if (sensorKey === 'sensor2') { pieChart2 = new Chart(pieCtx2, newConfig); } } }
+        function calculateTimeUnit(startTime, endTime) { /* ... আগের মতই ... */ const duration = moment.duration(endTime.diff(startTime)); if (duration.asMinutes() <= 90) return 'minute'; if (duration.asHours() <= 48) return 'hour'; if (duration.asDays() <= 31) return 'day'; return 'month'; }
+
+        // --- Main Dashboard Update Function ---
+        // এখন কাস্টম সময়সীমা গ্রহণ করতে পারে
+        function filterAndupdateDashboard(period = null, customStartTime = null, customEndTime = null) {
+
+             if (!allData || allData.length === 0) {
+                 // Clear period averages, charts etc.
+                 avgPeriodS1TempEl.textContent = '--.- °C'; avgPeriodS1HumEl.textContent = '--.- %';
+                 avgPeriodS2TempEl.textContent = '--.- °C'; avgPeriodS2HumEl.textContent = '--.- %';
+                 if (sensorChart) { sensorChart.data.labels = []; sensorChart.data.datasets.forEach(ds => ds.data = []); sensorChart.update(); }
+                 if (pieChart1) { pieChart1.data.datasets[0].data = [0, 0, 0]; pieChart1.update(); }
+                 if (pieChart2) { pieChart2.data.datasets[0].data = [0, 0, 0]; pieChart2.update(); }
+                 selectedPeriodLabelEl.textContent = 'N/A'; // Update label
+                 return;
+             }
+
+             let startTime, endTime = moment(); // Default end time is now
+             let filteredPeriodData = [];
+             let displayLabel = '';
+
+             // নির্ধারণ করুন পিরিয়ড বাটন নাকি কাস্টম ডেট ফিল্টার ব্যবহার হচ্ছে
+             if (customStartTime && customEndTime && customStartTime.isValid() && customEndTime.isValid() && customStartTime.isBefore(customEndTime)) {
+                 startTime = customStartTime;
+                 endTime = customEndTime;
+                 isDateFilterActive = true;
+                 displayLabel = `${startTime.format('YYYY-MM-DD HH:mm')} থেকে ${endTime.format('YYYY-MM-DD HH:mm')}`;
+
+                 // Filter data based on CUSTOM date range
+                 filteredPeriodData = allData.filter(item => {
+                     const itemTime = moment(item.timestamp, 'YYYY-MM-DD HH:mm:ss');
+                     return itemTime.isValid() && itemTime.isBetween(startTime, endTime, null, '[]'); // Inclusive '[]'
+                 });
+
+             } else {
+                 // পিরিয়ড বাটন বা ডিফল্ট লোড
+                 isDateFilterActive = false;
+                 const currentPeriodToUse = period || currentPeriod || '1d'; // Use passed period, fallback to global, then default
+                 const buttonElement = document.querySelector(`.filter-button[data-period="${currentPeriodToUse}"]`);
+                 displayLabel = buttonElement ? buttonElement.textContent : currentPeriodToUse;
+
+                 switch (currentPeriodToUse) {
+                     case '15m': startTime = endTime.clone().subtract(15, 'minutes'); break;
+                     case '30m': startTime = endTime.clone().subtract(30, 'minutes'); break;
+                     case '1h': startTime = endTime.clone().subtract(1, 'hours'); break;
+                     case '7d': startTime = endTime.clone().subtract(7, 'days'); break;
+                     case '15d': startTime = endTime.clone().subtract(15, 'days'); break;
+                     case '30d': startTime = endTime.clone().subtract(30, 'days'); break;
+                     case '1d': default: startTime = endTime.clone().subtract(1, 'days'); break;
+                 }
+
+                 // Filter data based on PERIOD button range
+                 filteredPeriodData = allData.filter(item => {
+                     const itemTime = moment(item.timestamp, 'YYYY-MM-DD HH:mm:ss');
+                     return itemTime.isValid() && itemTime.isAfter(startTime); // endTime is 'now' here
+                 });
+             }
+
+            // --- Update Period Averages ---
+             if (filteredPeriodData.length > 0) {
+                 avgPeriodS1TempEl.textContent = `${calculateAverage(filteredPeriodData, 'sensor1', 'temperature')} °C`;
+                 avgPeriodS1HumEl.textContent = `${calculateAverage(filteredPeriodData, 'sensor1', 'humidity')} %`;
+                 avgPeriodS2TempEl.textContent = `${calculateAverage(filteredPeriodData, 'sensor2', 'temperature')} °C`;
+                 avgPeriodS2HumEl.textContent = `${calculateAverage(filteredPeriodData, 'sensor2', 'humidity')} %`;
+             } else {
+                 avgPeriodS1TempEl.textContent = 'N/A'; avgPeriodS1HumEl.textContent = 'N/A';
+                 avgPeriodS2TempEl.textContent = 'N/A'; avgPeriodS2HumEl.textContent = 'N/A';
+             }
+
+            // --- Update Pie Charts ---
+             updatePieCharts(filteredPeriodData, pieChart1, 'sensor1');
+             updatePieCharts(filteredPeriodData, pieChart2, 'sensor2');
+
+            // --- Update Line Chart ---
+             const labels = []; const temp1Data = []; const hum1Data = [];
+             const temp2Data = []; const hum2Data = [];
+             filteredPeriodData.forEach(item => {
+                 labels.push(moment(item.timestamp, 'YYYY-MM-DD HH:mm:ss'));
+                 temp1Data.push(item.sensor1 ? item.sensor1.temperature : null);
+                 hum1Data.push(item.sensor1 ? item.sensor1.humidity : null);
+                 temp2Data.push(item.sensor2 ? item.sensor2.temperature : null);
+                 hum2Data.push(item.sensor2 ? item.sensor2.humidity : null);
+             });
+
+             if (sensorChart) { /* ... Update existing chart ... */ sensorChart.data.labels = labels; sensorChart.data.datasets[0].data = temp1Data; sensorChart.data.datasets[1].data = hum1Data; sensorChart.data.datasets[2].data = temp2Data; sensorChart.data.datasets[3].data = hum2Data; sensorChart.options.scales.x.time.unit = calculateTimeUnit(startTime, endTime); sensorChart.update(); }
+             else { /* ... Initialize chart ... */ lineChartConfig.data.labels = labels; lineChartConfig.data.datasets[0].data = temp1Data; lineChartConfig.data.datasets[1].data = hum1Data; lineChartConfig.data.datasets[2].data = temp2Data; lineChartConfig.data.datasets[3].data = hum2Data; lineChartConfig.options.scales.x.time.unit = calculateTimeUnit(startTime, endTime); sensorChart = new Chart(lineCtx, lineChartConfig); }
+
+             // Update the label showing the current period/range
+             selectedPeriodLabelEl.textContent = displayLabel;
+
+             // Update period button states based on date filter activity
+             filterButtons.forEach(btn => {
+                 btn.disabled = isDateFilterActive;
+                 if (!isDateFilterActive && btn.getAttribute('data-period') === currentPeriod) {
+                     btn.classList.add('active');
+                 } else if (!isDateFilterActive) {
+                     btn.classList.remove('active');
+                 } else {
+                     // Keep removing active class if date filter is on
+                      btn.classList.remove('active');
+                 }
+             });
+         }
+
+        // Function to fetch data from API and update everything
+        async function fetchData() {
+             console.log("Fetching data...");
+             try {
+                 const response = await fetch(API_URL);
+                 if (!response.ok) { /* ... Error handling ... */ console.error(`HTTP error! status: ${response.status}`); statusMessage.textContent = `ডেটা রিফ্রেশ করতে সমস্যা (${response.status})। শেষ আপডেট: ${moment(statusMessage.textContent.split(': ').pop(), 'YYYY-MM-DD HH:mm:ss').isValid() ? statusMessage.textContent.split(': ').pop() : 'Unknown'}`; return; }
+                 const newData = await response.json();
+                 allData = newData;
+                 const currentTimeFormatted = moment().format('YYYY-MM-DD HH:mm:ss');
+                 statusMessage.textContent = `সর্বশেষ ডেটা আপডেট: ${currentTimeFormatted}`;
+
+                 calculateAndUpdate24hrAverage(allData); // Update 24hr avg (always uses allData)
+
+                 // Update charts/averages based on current state (either period or custom date)
+                 // Important: Do NOT pass arguments here if we want it to use the existing state
+                 // Or explicitly check isDateFilterActive here? Let filterAndupdateDashboard handle it.
+                 if (isDateFilterActive) {
+                    // Re-apply date filter if it was active
+                     handleDateFilterApply();
+                 } else {
+                    filterAndupdateDashboard(currentPeriod); // Use the stored period
+                 }
+
+                 updateDataTable(allData); // Update table (always uses allData for latest 30)
+
+             } catch (error) { /* ... Error handling ... */ console.error('Fetch data failed:', error); statusMessage.textContent = `ডেটা রিফ্রেশ ব্যর্থ। শেষ আপডেট: ${moment(statusMessage.textContent.split(': ').pop(), 'YYYY-MM-DD HH:mm:ss').isValid() ? statusMessage.textContent.split(': ').pop() : 'Unknown'}`; }
+         }
+
+        // --- Event Listeners ---
+
+        // Period Button Listeners
+        filterButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Reset date filter when a period button is clicked
+                resetDateFilterState();
+
+                currentPeriod = button.getAttribute('data-period'); // Set current period
+                filterButtons.forEach(btn => btn.classList.remove('active')); // Update styles
+                button.classList.add('active');
+                filterAndupdateDashboard(currentPeriod); // Update dashboard for this period
+            });
+        });
+
+        // Date Filter Apply Button Listener
+        function handleDateFilterApply() {
+            const startVal = startDateInput.value;
+            const endVal = endDateInput.value;
+            dateFilterErrorEl.textContent = ''; // Clear previous errors
+
+            if (!startVal || !endVal) {
+                dateFilterErrorEl.textContent = 'অনুগ্রহ করে শুরু এবং শেষের তারিখ ও সময় নির্বাচন করুন।';
+                return;
+            }
+
+            const startTime = moment(startVal);
+            const endTime = moment(endVal);
+
+            if (!startTime.isValid() || !endTime.isValid()) {
+                dateFilterErrorEl.textContent = 'অবৈধ তারিখ বা সময়ের ফরম্যাট।';
+                return;
+            }
+
+            if (!startTime.isBefore(endTime)) {
+                dateFilterErrorEl.textContent = 'শুরুর তারিখ অবশ্যই শেষের তারিখের আগে হতে হবে।';
+                return;
+            }
+
+            // Date filter is valid and applied
+            isDateFilterActive = true;
+            filterAndupdateDashboard(null, startTime, endTime); // Pass custom times
+
+             // Disable period buttons visually
+             filterButtons.forEach(btn => {
+                 btn.disabled = true;
+                 btn.classList.remove('active'); // Ensure no period button seems active
+             });
+        }
+        filterDateButton.addEventListener('click', handleDateFilterApply);
+
+
+        // Date Filter Reset Button Listener
+        function resetDateFilterState() {
+             startDateInput.value = '';
+             endDateInput.value = '';
+             dateFilterErrorEl.textContent = '';
+             isDateFilterActive = false;
+             // Re-enable period buttons
+             filterButtons.forEach(btn => {
+                btn.disabled = false;
+             });
+             // Optionally set back to default period and update view
+             currentPeriod = '1d'; // Reset to default period
+             const defaultButton = document.querySelector(`.filter-button[data-period="${currentPeriod}"]`);
+             if(defaultButton) {
+                 filterButtons.forEach(btn => btn.classList.remove('active'));
+                 defaultButton.classList.add('active');
+             }
+             // Update dashboard view with default period
+             filterAndupdateDashboard(currentPeriod);
+        }
+        resetDateButton.addEventListener('click', resetDateFilterState);
+
+
+        // --- Initial Load & Auto-Refresh ---
+        fetchData(); // Fetch data and display initial view
+        setInterval(fetchData, 60000); // Refresh data every minute
+
+    </script>
+
+</body>
+</html>
