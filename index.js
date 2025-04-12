@@ -73,6 +73,25 @@ async function run() {
         res.status(400).json({ message: "Invalid data format" });
       }
     });
+    app.post('/api/data1', async (req, res) => {
+      console.log("Received data from NodeMCU:");
+      console.log(req.body); // NodeMCU থেকে পাঠানো JSON ডেটা এখানে পাওয়া যাবে
+    
+      // এখানে ডেটা ডাটাবেসে সংরক্ষণ করতে পারেন বা অন্য কোনো কাজ করতে পারেন
+      const { sensor1, sensor2, timestamp } = req.body;
+      const accounts = req.body;
+      if (sensor1 && sensor2 && timestamp) {
+         console.log(`Timestamp: ${timestamp}`);
+         console.log(`Sensor 1 (DHT11) - Temp: ${sensor1.temperature}°C, Hum: ${sensor1.humidity}%`);
+         console.log(`Sensor 2 (DHT22) - Temp: ${sensor2.temperature}°C, Hum: ${sensor2.humidity}%`);
+         // সফলভাবে ডেটা গ্রহণের পর একটি রেসপন্স পাঠান
+         res.status(200).json({ message: "Data received successfully" });
+         const result = await ESP_2Collection.insertOne(accounts);
+      res.send(result)
+      } else {
+        res.status(400).json({ message: "Invalid data format" });
+      }
+    });
 
 
     app.get('/api/esptemp', async(req, res) =>{
@@ -81,9 +100,20 @@ async function run() {
       const accounts = await cursor.toArray();
       res.send(accounts);
     })
+    app.get('/api/esptemp1', async(req, res) =>{
+      const query = {};
+      const cursor = ESP_2Collection.find(query);
+      const accounts = await cursor.toArray();
+      res.send(accounts);
+    })
     app.post('/api/esptempu', async (req, res) => {
       const accounts = req.body;
       const result = await bat_2Collection.insertOne(accounts);
+      res.send(result)
+    }); 
+    app.post('/api/esptempu1', async (req, res) => {
+      const accounts = req.body;
+      const result = await ESP_2Collection.insertOne(accounts);
       res.send(result)
     }); 
 
