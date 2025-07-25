@@ -51,6 +51,7 @@ async function run() {
     const products_2Collection = client.db('atifdatamax').collection('product_2');
     const ESP_2Collection = client.db('atifdatamax').collection('Tempareturedata');
     const bat_2Collection = client.db('atifdatamax').collection('batcuring');
+    const TrackDATACollection = client.db('atifdatamax').collection('TrackDATA');
 
 
 
@@ -100,6 +101,12 @@ async function run() {
       const accounts = await cursor.toArray();
       res.send(accounts);
     })
+    app.get('/api/trackdata', async(req, res) =>{
+      const query = {};
+      const cursor = TrackDATACollection.find(query);
+      const accounts = await cursor.toArray();
+      res.send(accounts);
+    })
     app.get('/api/esptemp1', async(req, res) =>{
       const query = {};
       const cursor =  bat_2Collection.find(query);
@@ -114,6 +121,11 @@ async function run() {
     app.post('/api/esptempu1', async (req, res) => {
       const accounts = req.body;
       const result = await bat_2Collection.insertOne(accounts);
+      res.send(result)
+    }); 
+    app.post('/api/trackdata', async (req, res) => {
+      const accounts = req.body;
+      const result = await TrackDATACollection.insertOne(accounts);
       res.send(result)
     }); 
 
