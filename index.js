@@ -101,7 +101,7 @@ async function run() {
       const accounts = await cursor.toArray();
       res.send(accounts);
     })
-    app.get('/api/trackdata', async(req, res) =>{
+    app.get('/api/trackdatafor', async(req, res) =>{
       const query = {};
       const cursor = TrackDATACollection.find(query);
       const accounts = await cursor.toArray();
