@@ -51,7 +51,7 @@ async function run() {
     const products_2Collection = client.db('atifdatamax').collection('product_2');
     const ESP_2Collection = client.db('atifdatamax').collection('Tempareturedata');
     const bat_2Collection = client.db('atifdatamax').collection('batcuring');
-    const TrackDATACollection = client.db('atifdatamax').collection('TrackDATA');
+    const TrackDATACollection = client.db('atifdatamax').collection('TrackDATA2');
 
 
 
